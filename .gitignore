@@ -1,2 +1,5 @@
-config/
+*/config/
 start.sh
+*.pyc
+output/*
+config/config.yaml
