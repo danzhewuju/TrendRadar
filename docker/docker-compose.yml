@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "127.0.0.1:${WEBSERVER_PORT:-8080}:${WEBSERVER_PORT:-8080}"
+      - "0.0.0.0:${WEBSERVER_PORT:-8080}:${WEBSERVER_PORT:-8080}"
 
     volumes:
       - ../config:/app/config:ro
@@ -63,7 +63,7 @@ services:
     restart: unless-stopped
 
     ports:
-      - "127.0.0.1:3333:3333"
+      - "0.0.0.0:3333:3333"
 
     volumes:
       - ../config:/app/config:ro

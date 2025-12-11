@@ -1,5 +1,7 @@
-*/config/
+config/
 start.sh
 *.pyc
 output/*
 config/config.yaml
+config/config_back.yaml
+config/frequency_words.txt
