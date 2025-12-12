@@ -140,7 +140,7 @@ cd 你的项目名
 
 双击运行 `start-http.bat`
 
-#### Mac
+#### Mac/Linux
 
 ```bash
 ./start-http.sh
@@ -152,3 +152,97 @@ cd 你的项目名
 类型: streamableHttp
 URL: http://localhost:3333/mcp
 ```
+
+### 🔒 Token 认证配置（推荐用于生产环境）
+
+为了安全起见，建议在生产环境中启用 Token 认证。
+
+#### 1. 服务器端配置
+
+**方式一：使用环境变量（推荐）**
+
+```bash
+# Linux/Mac
+export MCP_AUTH_TOKEN="your-secret-token-here"
+./start-http.sh
+
+# Windows (PowerShell)
+$env:MCP_AUTH_TOKEN="your-secret-token-here"
+.\start-http.bat
+```
+
+**方式二：使用命令行参数**
+
+修改 `start-http.sh` 或 `start-http.bat`，在启动命令中添加 `--auth-token` 参数：
+
+```bash
+python -m mcp_server.server --transport http --host 0.0.0.0 --port 3333 --auth-token your-secret-token-here
+```
+
+#### 2. 客户端配置（Cherry Studio）
+
+在 Cherry Studio 中配置 HTTP 模式的 MCP 服务器时，需要添加认证头。根据服务器端支持的认证方式，有以下三种配置方法：
+
+**方法一：使用 Authorization Bearer 头（推荐）**
+
+⚠️ **重要**：必须在 token 前面加上 `Bearer ` 前缀（注意 Bearer 后面有一个空格）！
+
+在 Cherry Studio 的 MCP 服务器配置中：
+
+```
+类型: streamableHttp
+URL: http://localhost:3333/mcp
+Headers:
+  Authorization: Bearer your-secret-token-here
+```
+
+或者使用 JSON 配置：
+```json
+{
+  "url": "http://localhost:3333/mcp",
+  "headers": {
+    "Authorization": "Bearer your-secret-token-here"
+  }
+}
+```
+
+**方法二：使用 X-API-Token 头（更简单，无需 Bearer 前缀）**
+
+这种方式不需要 Bearer 前缀，直接使用 token 值即可：
+
+```
+类型: streamableHttp
+URL: http://localhost:3333/mcp
+Headers:
+  X-API-Token: your-secret-token-here
+```
+
+或者使用 JSON 配置：
+```json
+{
+  "url": "http://localhost:3333/mcp",
+  "headers": {
+    "X-API-Token": "chingblxyh666888"
+  }
+}
+```
+
+**方法三：使用查询参数（不推荐，仅用于测试）**
+
+```
+类型: streamableHttp
+URL: http://localhost:3333/mcp?token=your-secret-token-here
+```
+
+> ⚠️ **注意**：如果 Cherry Studio 不支持自定义请求头，可能需要使用查询参数方式，但这不够安全，建议仅用于测试环境。
+
+#### 3. 验证 Token 认证
+
+启动服务器后，如果看到以下信息，说明 Token 认证已启用：
+
+```
+🔒 Token 认证: 已启用
+💡 提示: 请在请求头中包含有效的 token
+```
+
+如果客户端未提供正确的 token，服务器会返回 401 错误。

@@ -71,3 +71,4 @@ services:
 
     environment:
       - TZ=Asia/Shanghai
+      - MCP_AUTH_TOKEN=chingblxyh666888

@@ -6,7 +6,12 @@ TrendRadar MCP Server - FastMCP 2.0 实现
 """
 
 import json
+import os
 from typing import List, Optional, Dict
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware import Middleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from fastmcp import FastMCP
 
@@ -24,6 +29,52 @@ mcp = FastMCP('trendradar-news')
 
 # 全局工具实例（在第一次请求时初始化）
 _tools_instances = {}
+
+# Token 认证配置
+# 优先从环境变量读取，也可以通过命令行参数传递
+MCP_AUTH_TOKEN = os.environ.get('MCP_AUTH_TOKEN', '').strip()
+
+
+class TokenAuthMiddleware(BaseHTTPMiddleware):
+    """Token 认证中间件"""
+    
+    async def dispatch(self, request: Request, call_next):
+        # 如果未配置 token，跳过认证
+        if not MCP_AUTH_TOKEN:
+            return await call_next(request)
+        
+        # 获取 token（支持多种方式）
+        token = None
+        
+        # 方式1: Authorization: Bearer <token>
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            token = auth_header[7:]
+        
+        # 方式2: X-API-Token 头
+        if not token:
+            token = request.headers.get('X-API-Token', '')
+        
+        # 方式3: 查询参数（不推荐，但为了兼容性提供）
+        if not token:
+            token = request.query_params.get('token', '')
+        
+        # 验证 token
+        if token != MCP_AUTH_TOKEN:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": {
+                        "code": "UNAUTHORIZED",
+                        "message": "无效的认证 token。请提供有效的 token 通过以下方式之一："
+                                   "1. Authorization: Bearer <token> 头"
+                                   "2. X-API-Token: <token> 头"
+                                   "3. ?token=<token> 查询参数"
+                    }
+                }
+            )
+        
+        return await call_next(request)
 
 
 def _get_tools(project_root: Optional[str] = None):
@@ -663,7 +714,8 @@ def run_server(
     project_root: Optional[str] = None,
     transport: str = 'stdio',
     host: str = '0.0.0.0',
-    port: int = 3333
+    port: int = 3333,
+    auth_token: Optional[str] = None
 ):
     """
     启动 MCP 服务器
@@ -673,7 +725,13 @@ def run_server(
         transport: 传输模式，'stdio' 或 'http'
         host: HTTP模式的监听地址，默认 0.0.0.0
         port: HTTP模式的监听端口，默认 3333
+        auth_token: Token 认证密钥（可选，优先使用环境变量 MCP_AUTH_TOKEN）
     """
+    # 如果通过参数传递了 token，使用参数值（优先级高于环境变量）
+    global MCP_AUTH_TOKEN
+    if auth_token is not None:
+        # 如果传递了空字符串，表示禁用认证
+        MCP_AUTH_TOKEN = auth_token.strip() if auth_token.strip() else ''
     # 初始化工具实例
     _get_tools(project_root)
 
@@ -690,6 +748,13 @@ def run_server(
     elif transport == 'http':
         print(f"  协议: MCP over HTTP (生产环境)")
         print(f"  服务器监听: {host}:{port}")
+        
+        # 显示认证状态
+        if MCP_AUTH_TOKEN:
+            print(f"  🔒 Token 认证: 已启用")
+            print(f"  💡 提示: 请在请求头中包含有效的 token")
+        else:
+            print(f"  ⚠️  Token 认证: 未启用（建议设置 MCP_AUTH_TOKEN 环境变量）")
 
     if project_root:
         print(f"  项目目录: {project_root}")
@@ -729,12 +794,39 @@ def run_server(
         mcp.run(transport='stdio')
     elif transport == 'http':
         # HTTP 模式（生产推荐）
-        mcp.run(
-            transport='http',
-            host=host,
-            port=port,
-            path='/mcp'  # HTTP 端点路径
-        )
+        # 如果配置了 token，添加认证中间件
+        if MCP_AUTH_TOKEN:
+            # 使用 http_app 方法创建应用，并传入中间件
+            middleware = [Middleware(TokenAuthMiddleware)]
+            mcp_app = mcp.http_app(path='/mcp', middleware=middleware)
+            
+            # 手动运行 ASGI 应用
+            try:
+                import uvicorn
+                uvicorn.run(
+                    mcp_app,
+                    host=host,
+                    port=port,
+                    log_level='info'
+                )
+            except ImportError:
+                # 如果 uvicorn 不可用，回退到默认方式（但中间件不会生效）
+                print("  ⚠️  警告: uvicorn 未安装，无法启用 token 认证")
+                print("  💡 提示: 请安装 uvicorn 以启用 token 认证: pip install uvicorn")
+                mcp.run(
+                    transport='http',
+                    host=host,
+                    port=port,
+                    path='/mcp'
+                )
+        else:
+            # 未配置 token，使用默认方式运行
+            mcp.run(
+                transport='http',
+                host=host,
+                port=port,
+                path='/mcp'  # HTTP 端点路径
+            )
     else:
         raise ValueError(f"不支持的传输模式: {transport}")
 
@@ -770,6 +862,10 @@ if __name__ == '__main__':
         '--project-root',
         help='项目根目录路径'
     )
+    parser.add_argument(
+        '--auth-token',
+        help='Token 认证密钥（可选，建议使用环境变量 MCP_AUTH_TOKEN）'
+    )
 
     args = parser.parse_args()
 
@@ -777,5 +873,6 @@ if __name__ == '__main__':
         project_root=args.project_root,
         transport=args.transport,
         host=args.host,
-        port=args.port
+        port=args.port,
+        auth_token=args.auth_token
     )

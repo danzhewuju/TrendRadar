@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.5
 FROM python:3.10-slim
 
 WORKDIR /app
@@ -51,7 +52,14 @@ RUN set -ex && \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# pip 国内源加速（可在 build 时通过 --build-arg 覆盖为 https://pypi.org/simple）
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --upgrade pip && \
+    python -m pip config set global.index-url "${PIP_INDEX_URL}" && \
+    python -m pip config set global.trusted-host "${PIP_TRUSTED_HOST}" && \
+    python -m pip install -r requirements.txt
 
 COPY main.py .
 COPY docker/manage.py .

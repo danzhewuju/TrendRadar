@@ -1,10 +1,19 @@
+# syntax=docker/dockerfile:1.5
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# 安装依赖
+# pip 国内源加速（可在 build 时通过 --build-arg 覆盖为 https://pypi.org/simple）
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_TRUSTED_HOST=pypi.tuna.tsinghua.edu.cn
+
+# 安装依赖（启用 BuildKit pip cache，二次构建更快）
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m pip install --upgrade pip && \
+    python -m pip config set global.index-url "${PIP_INDEX_URL}" && \
+    python -m pip config set global.trusted-host "${PIP_TRUSTED_HOST}" && \
+    python -m pip install -r requirements.txt
 
 # 复制 MCP 服务器代码
 COPY mcp_server/ ./mcp_server/

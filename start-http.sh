@@ -18,5 +18,15 @@ echo "[地址] http://localhost:3333/mcp"
 echo "[提示] 按 Ctrl+C 停止服务"
 echo ""
 
-conda activate ai
-python -m mcp_server.server --transport http --host 0.0.0.0 --port 3333
+# 检查是否设置了 token（优先使用环境变量）
+if [ -n "$MCP_AUTH_TOKEN" ]; then
+    echo "[认证] Token 已启用（从环境变量读取）"
+    echo ""
+    conda activate ai
+    python -m mcp_server.server --transport http --host 0.0.0.0 --port 3333 --auth-token "$MCP_AUTH_TOKEN"
+else
+    echo "[认证] Token 未设置（如需启用，请设置环境变量: export MCP_AUTH_TOKEN='your-token'）"
+    echo ""
+    conda activate ai
+    python -m mcp_server.server --transport http --host 0.0.0.0 --port 3333
+fi
